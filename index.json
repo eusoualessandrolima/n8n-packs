@@ -10,6 +10,16 @@
       "tags": ["seguros", "vendas", "atendimento", "voz"],
       "min_plugin_version": "1.0.0",
       "tarball_url_template": "https://github.com/eusoualessandrolima/n8n-packs/releases/download/corretora-seguros-v{version}/corretora-seguros-{version}.tar.gz"
+    },
+    {
+      "slug": "advocacia-trabalhista",
+      "name": "Advocacia Trabalhista",
+      "description": "Assistente de advocacia trabalhista no WhatsApp: triagem de casos, avaliação de viabilidade (CLT e Previdenciário), agendamento de consulta, envio de honorários e escalada para o advogado humano.",
+      "latest_version": "1.0.0",
+      "language": "pt-BR",
+      "tags": ["advocacia", "juridico", "trabalhista", "previdenciario", "atendimento"],
+      "min_plugin_version": "1.0.0",
+      "tarball_url_template": "https://github.com/eusoualessandrolima/n8n-packs/releases/download/advocacia-trabalhista-v{version}/advocacia-trabalhista-{version}.tar.gz"
     }
   ]
 }

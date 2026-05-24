@@ -1,0 +1,46 @@
+{
+  "schema_version": "1",
+  "slug": "advocacia-trabalhista",
+  "name": "Advocacia Trabalhista",
+  "version": "1.0.0",
+  "description": "Assistente de advocacia trabalhista no WhatsApp: triagem de casos, avaliação de viabilidade (CLT e Previdenciário), agendamento de consulta, envio de honorários e escalada para o advogado humano.",
+  "language": "pt-BR",
+  "min_plugin_version": "1.0.0",
+  "tags": ["advocacia", "juridico", "trabalhista", "previdenciario", "atendimento"],
+
+  "workflows": {
+    "dir": "workflows",
+    "entrypoints": [
+      "00. Configurações - Advocacia Trabalhista.json"
+    ]
+  },
+
+  "required_community_nodes": [
+    { "pkg": "@fazer-ai/n8n-nodes-chatwoot", "min_version": "2.3.0" },
+    { "pkg": "@elevenlabs/n8n-nodes-elevenlabs", "min_version": "0.2.4" }
+  ],
+
+  "required_credentials": [
+    { "type": "openAiApi",         "optional": false },
+    { "type": "fazerAiChatwootApi","optional": false },
+    { "type": "postgres",          "optional": false, "purpose": "workflow-state" },
+    { "type": "elevenLabsApi",     "optional": true,  "enables_feature": "Respostas em áudio" }
+  ],
+
+  "cred_by_type_hint": {
+    "@fazer-ai/n8n-nodes-chatwoot.chatwoot":        "fazerAiChatwootApi",
+    "@fazer-ai/n8n-nodes-chatwoot.chatwootTool":    "fazerAiChatwootApi",
+    "@fazer-ai/n8n-nodes-chatwoot.chatwootTrigger": "fazerAiChatwootApi",
+    "@elevenlabs/n8n-nodes-elevenlabs.elevenLabs":  "elevenLabsApi",
+    "@n8n/n8n-nodes-langchain.lmChatOpenAi":        "openAiApi",
+    "@n8n/n8n-nodes-langchain.openAi":              "openAiApi",
+    "@n8n/n8n-nodes-langchain.memoryPostgresChat":  "postgres",
+    "n8n-nodes-base.openAi":                        "openAiApi",
+    "n8n-nodes-base.postgres":                      "postgres"
+  },
+
+  "info_node_defaults": {},
+
+  "postinstall_notes": "Depois da instalação, abra o workflow '00. Configurações - Advocacia Trabalhista' no n8n para ajustar o nome do escritório, áreas de atuação, horário de atendimento e mensagens. O pack assume uma caixa de WhatsApp por escritório.",
+  "docs_url": "https://github.com/eusoualessandrolima/n8n-packs/tree/main/packs/advocacia-trabalhista#readme"
+}

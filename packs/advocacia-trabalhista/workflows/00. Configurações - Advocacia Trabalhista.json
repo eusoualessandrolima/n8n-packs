@@ -1,0 +1,931 @@
+{
+  "name": "00. Configurações - Advocacia Trabalhista",
+  "description": null,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        368,
+        2256
+      ],
+      "id": "13d159e9-ea83-4711-b69f-50302bf1b164",
+      "name": "Gatilho",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "resource": "account",
+        "accountId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "<SELECIONE SUA CONTA>",
+          "cachedResultUrl": ""
+        }
+      },
+      "type": "@fazer-ai/n8n-nodes-chatwoot.chatwoot",
+      "typeVersion": 1,
+      "position": [
+        704,
+        2256
+      ],
+      "id": "dc0cd9ea-9872-4ab4-95c4-f8840ef45d39",
+      "name": "Selecionar conta",
+      "credentials": {},
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Tabela de histórico de mensagens (memória do agente)\nCREATE TABLE IF NOT EXISTS n8n_historico_mensagens (\n    id SERIAL PRIMARY KEY,\n    session_id VARCHAR(40) NOT NULL,\n    message JSONB NOT NULL,\n    created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP\n);\nCREATE INDEX IF NOT EXISTS idx_historico_session\n    ON n8n_historico_mensagens(session_id);\n\n-- Fila de mensagens (debounce)\nCREATE TABLE IF NOT EXISTS n8n_fila_mensagens (\n    id BIGSERIAL PRIMARY KEY,\n    id_mensagem VARCHAR(40) NOT NULL,\n    telefone VARCHAR(40) NOT NULL,\n    mensagem TEXT NOT NULL,\n    \"timestamp\" TIMESTAMP WITHOUT TIME ZONE NOT NULL\n);\nCREATE INDEX IF NOT EXISTS idx_fila_telefone\n    ON n8n_fila_mensagens(telefone);\n\n-- Status de atendimento (lock de concorrência)\nCREATE TABLE IF NOT EXISTS n8n_status_atendimento (\n    id SERIAL PRIMARY KEY,\n    session_id VARCHAR(40) UNIQUE NOT NULL,\n    lock_conversa BOOLEAN DEFAULT FALSE,\n    updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP\n);\nCREATE INDEX IF NOT EXISTS idx_status_session\n    ON n8n_status_atendimento(session_id);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1008,
+        1520
+      ],
+      "id": "ca36591e-0458-4ce7-87cd-c65298d21dce",
+      "name": "Configurar tabelas",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "505da86d-3578-43ff-a446-5569a2328142",
+              "name": "etiquetas",
+              "value": "=[\n  {\n    \"etiqueta\": \"testando-agente\",\n    \"cor\": \"#6BBF8A\",\n    \"descricao\": \"Habilita agente IA em modo teste\"\n  },\n  {\n    \"etiqueta\": \"agente-off\",\n    \"cor\": \"#E8735A\",\n    \"descricao\": \"Desabilita agente IA\"\n  }\n]",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        992,
+        1792
+      ],
+      "id": "57b67cdc-d622-4ec5-8844-1ac0f185e128",
+      "name": "Etiquetas",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "etiquetas",
+        "options": {
+          "destinationFieldName": "etiqueta"
+        }
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        1792
+      ],
+      "id": "91282b19-4c36-4dd8-99db-cb467074649d",
+      "name": "Split etiquetas",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "resource": "label",
+        "accountId": {
+          "__rl": true,
+          "value": "={{ $('Selecionar conta').item.json.id }}",
+          "mode": "id"
+        },
+        "title": "={{ $json.etiqueta.etiqueta }}",
+        "additionalFields": {
+          "color": "={{ $json.etiqueta.cor }}",
+          "description": "={{ $json.etiqueta.descricao }}",
+          "show_on_sidebar": true
+        }
+      },
+      "type": "@fazer-ai/n8n-nodes-chatwoot.chatwoot",
+      "typeVersion": 1,
+      "position": [
+        1408,
+        1792
+      ],
+      "id": "6e54cff0-baf9-47ec-ba2d-caab1fc65a7a",
+      "name": "Criar etiqueta",
+      "credentials": {},
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "505da86d-3578-43ff-a446-5569a2328142",
+              "name": "atributos",
+              "value": "=[\n  {\n    \"chave\": \"cpf\",\n    \"nome_display\": \"CPF\",\n    \"tipo\": \"text\",\n    \"modelo\": \"contato\",\n    \"descricao\": \"CPF do cliente (apenas números)\"\n  },\n  {\n    \"chave\": \"data_nascimento\",\n    \"nome_display\": \"Data de nascimento\",\n    \"tipo\": \"date\",\n    \"modelo\": \"contato\",\n    \"descricao\": \"Data de nascimento do cliente (AAAA-MM-DD)\"\n  },\n  {\n    \"chave\": \"profissao\",\n    \"nome_display\": \"Profissão\",\n    \"tipo\": \"text\",\n    \"modelo\": \"contato\",\n    \"descricao\": \"Profissão atual do cliente\"\n  },\n  {\n    \"chave\": \"cidade\",\n    \"nome_display\": \"Cidade\",\n    \"tipo\": \"text\",\n    \"modelo\": \"contato\",\n    \"descricao\": \"Cidade de residência\"\n  },\n  {\n    \"chave\": \"uf\",\n    \"nome_display\": \"UF\",\n    \"tipo\": \"text\",\n    \"modelo\": \"contato\",\n    \"descricao\": \"Unidade federativa (ex: SP)\"\n  },\n  {\n    \"chave\": \"tipo_acao\",\n    \"nome_display\": \"Tipo de Ação\",\n    \"tipo\": \"list\",\n    \"modelo\": \"tarefa\",\n    \"descricao\": \"Área jurídica da demanda\",\n    \"valores\": [\"trabalhista\", \"previdenciario\"]\n  },\n  {\n    \"chave\": \"subtipo_acao\",\n    \"nome_display\": \"Subtipo da Ação\",\n    \"tipo\": \"text\",\n    \"modelo\": \"tarefa\",\n    \"descricao\": \"Tipo específico da demanda (demissao_sem_justa_causa, horas_extras, aposentadoria, auxilio_doenca, pensao_por_morte, etc.)\"\n  },\n  {\n    \"chave\": \"empregador\",\n    \"nome_display\": \"Empregador\",\n    \"tipo\": \"text\",\n    \"modelo\": \"tarefa\",\n    \"descricao\": \"Nome do empregador (casos trabalhistas)\"\n  },\n  {\n    \"chave\": \"data_admissao\",\n    \"nome_display\": \"Data de admissão\",\n    \"tipo\": \"date\",\n    \"modelo\": \"tarefa\",\n    \"descricao\": \"Data de admissão no emprego (AAAA-MM-DD)\"\n  },\n  {\n    \"chave\": \"data_demissao\",\n    \"nome_display\": \"Data de demissão\",\n    \"tipo\": \"date\",\n    \"modelo\": \"tarefa\",\n    \"descricao\": \"Data de demissão (AAAA-MM-DD)\"\n  },\n  {\n    \"chave\": \"numero_processo\",\n    \"nome_display\": \"Número do processo\",\n    \"tipo\": \"text\",\n    \"modelo\": \"tarefa\",\n    \"descricao\": \"Número do processo judicial\"\n  },\n  {\n    \"chave\": \"honorarios\",\n    \"nome_display\": \"Honorários (R$)\",\n    \"tipo\": \"text\",\n    \"modelo\": \"tarefa\",\n    \"descricao\": \"Valor ou percentual dos honorários acordados\"\n  },\n  {\n    \"chave\": \"tipo_contrato\",\n    \"nome_display\": \"Tipo de contrato\",\n    \"tipo\": \"list\",\n    \"modelo\": \"tarefa\",\n    \"descricao\": \"Modalidade do contrato de honorários\",\n    \"valores\": [\"percentual\", \"valor_fixo\", \"exitoso\"]\n  },\n  {\n    \"chave\": \"numero_urgencia\",\n    \"nome_display\": \"Número da urgência\",\n    \"tipo\": \"text\",\n    \"modelo\": \"tarefa\",\n    \"descricao\": \"Número da urgência jurídica registrada\"\n  },\n  {\n    \"chave\": \"tipo_urgencia\",\n    \"nome_display\": \"Tipo da urgência\",\n    \"tipo\": \"text\",\n    \"modelo\": \"tarefa\",\n    \"descricao\": \"Tipo da urgência (tutela_antecipada, liminar, prazo_prescricional, outros)\"\n  }\n]",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        992,
+        1968
+      ],
+      "id": "3e0895c2-1791-4b37-96ed-f58f921b10ae",
+      "name": "Atributos customizados",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "atributos",
+        "options": {
+          "destinationFieldName": "atributo"
+        }
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        1968
+      ],
+      "id": "3961f3fa-98b9-4212-b595-9e6670e4f79b",
+      "name": "Split atributos",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "resource": "customAttribute",
+        "accountId": {
+          "__rl": true,
+          "value": "={{ $('Selecionar conta').item.json.id }}",
+          "mode": "id"
+        },
+        "attributeModel": "={{ ({ conversa: 'conversation_attribute', contato: 'contact_attribute', tarefa: 'task_attribute' })[$json.atributo.modelo] }}",
+        "attributeDisplayName": "={{ $json.atributo.nome_display }}",
+        "attributeType": "={{ $json.atributo.tipo }}",
+        "additionalFields": {
+          "attributeDescription": "={{ $json.atributo.descricao }}",
+          "attributeKey": "={{ $json.atributo.chave }}",
+          "attributeValues": "={{ $json.atributo.valores?.toJsonString() }}"
+        }
+      },
+      "type": "@fazer-ai/n8n-nodes-chatwoot.chatwoot",
+      "typeVersion": 1,
+      "position": [
+        1408,
+        1968
+      ],
+      "id": "eec59f34-c993-40a9-950a-95e5f2936cb8",
+      "name": "Criar atributo",
+      "credentials": {},
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "kanbanBoard",
+        "accountId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "name": "Advocacia Trabalhista",
+        "currency": "BRL",
+        "automations": {
+          "settings": {}
+        }
+      },
+      "type": "@fazer-ai/n8n-nodes-chatwoot.chatwoot",
+      "typeVersion": 1,
+      "position": [
+        976,
+        2256
+      ],
+      "id": "a8e50839-2421-4eaf-ac58-6927b1d7b4c9",
+      "name": "Criar funil",
+      "credentials": {},
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        2448
+      ],
+      "id": "6b8d62ed-d937-4b17-9033-aba868c3006a",
+      "name": "Funil já criado",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "87e19aff-212f-4068-92d6-bd3d6d45de78",
+              "name": "id_funil",
+              "value": "={{ $('Criar funil').item.json.id }}",
+              "type": "number"
+            },
+            {
+              "id": "505da86d-3578-43ff-a446-5569a2328142",
+              "name": "etapas",
+              "value": "=[\n  { \"etapa\": \"Novo Lead\", \"cor\": \"#5B9BD5\", \"descricao\": \"Primeiro contato\" },\n  { \"etapa\": \"Análise Solicitada\", \"cor\": \"#F39C12\", \"descricao\": \"IA coletando dados do caso para análise preliminar\" },\n  { \"etapa\": \"Proposta Enviada\", \"cor\": \"#9B7ED8\", \"descricao\": \"Contrato de honorários enviado, aguardando decisão\" },\n  { \"etapa\": \"Contratado\", \"cor\": \"#5CC0C7\", \"descricao\": \"Cliente assinou o contrato de honorários\" },\n  { \"etapa\": \"Em Andamento\", \"cor\": \"#3A8F5C\", \"descricao\": \"Processo judicial em curso\" },\n  { \"etapa\": \"Êxito\", \"cor\": \"#2E7D32\", \"descricao\": \"Resultado favorável obtido\" },\n  { \"etapa\": \"Perdido\", \"cor\": \"#A0A0A0\", \"descricao\": \"Lead desistiu ou caso inviável\", \"perdida\": true },\n  { \"etapa\": \"Encerrado\", \"cor\": \"#607D8B\", \"descricao\": \"Caso encerrado (acordo, desistência ou conclusão)\" }\n]",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1184,
+        2256
+      ],
+      "id": "8f71c49f-70a1-4424-ad4b-c1c71d99fa64",
+      "name": "Etapas",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "etapas",
+        "options": {
+          "destinationFieldName": "etapa"
+        }
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1376,
+        2256
+      ],
+      "id": "63a70c33-0c9c-49f0-bad1-91b2b31abd1d",
+      "name": "Split etapas",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "resource": "kanbanStep",
+        "accountId": {
+          "__rl": true,
+          "value": "={{ $('Selecionar conta').item.json.id }}",
+          "mode": "id"
+        },
+        "kanbanBoardId": {
+          "__rl": true,
+          "value": "={{ $('Etapas').item.json.id_funil }}",
+          "mode": "id"
+        },
+        "name": "={{ $json.etapa.etapa }}",
+        "additionalFields": {
+          "color": "={{ $json.etapa.cor }}",
+          "description": "={{ $json.etapa.descricao }}"
+        }
+      },
+      "type": "@fazer-ai/n8n-nodes-chatwoot.chatwoot",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        2256
+      ],
+      "id": "956f14ed-6ca6-4c18-b39d-61bc89ff596c",
+      "name": "Criar etapa",
+      "credentials": {},
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "99581fa6-0cfa-450c-a5e1-eb9eaa252055",
+              "leftValue": "={{ $('Split etapas').item.json.etapa.perdida }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1776,
+        2256
+      ],
+      "id": "1091d8ec-9b5d-4b3e-a9df-e9d6f922b70b",
+      "name": "Perdida?",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "resource": "kanbanStep",
+        "operation": "update",
+        "accountId": {
+          "__rl": true,
+          "value": "={{ $('Selecionar conta').item.json.id }}",
+          "mode": "id"
+        },
+        "kanbanBoardId": {
+          "__rl": true,
+          "value": "={{ $('Criar funil').item.json.id }}",
+          "mode": "id"
+        },
+        "kanbanStepId": {
+          "__rl": true,
+          "value": "={{ $('Criar etapa').item.json.id }}",
+          "mode": "id"
+        },
+        "updateStepFields": {
+          "cancelled": true
+        }
+      },
+      "type": "@fazer-ai/n8n-nodes-chatwoot.chatwoot",
+      "typeVersion": 1,
+      "position": [
+        2000,
+        2256
+      ],
+      "id": "d12ae580-530c-43e2-8ca8-0877c7bf1b7e",
+      "name": "Atualizar etapa perdida",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "content": "## Criar tabelas Postgres\n\nMemória do agente, debounce e lock de concorrência.",
+        "height": 280,
+        "width": 320,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        912,
+        1424
+      ],
+      "id": "d5b66d21-5643-4278-96b6-e30b3fdfa5fe",
+      "name": "Note Postgres",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "content": "## Etiquetas + atributos customizados\n\nEtiquetas controlam quando a IA responde. Atributos guardam dados do cliente e do caso direto no contato / conversa.",
+        "height": 432,
+        "width": 752,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        912,
+        1712
+      ],
+      "id": "d526f00f-a87b-499d-9136-6c03119e76dd",
+      "name": "Note Etiquetas",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "content": "## Funil Kanban — Advocacia Trabalhista\n\n8 etapas do primeiro contato até o encerramento. Urgências jurídicas rodam em funil paralelo separado (abaixo).",
+        "height": 432,
+        "width": 1312,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        912,
+        2160
+      ],
+      "id": "b1d869c0-f811-4337-ac6d-4c48bb12ea83",
+      "name": "Note Funil",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "content": "# Checklist\n- [ ] Instalar community node @fazer-ai/n8n-nodes-chatwoot\n- [ ] Credenciais: Postgres + Chatwoot\n- [ ] Selecionar conta certa no node \"Selecionar conta\"\n- [ ] Executar o workflow (Gatilho manual)\n- [ ] Associar agentes e caixas de entrada ao novo funil",
+        "height": 280,
+        "width": 416,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1248,
+        1424
+      ],
+      "id": "3cc0d12c-3427-4660-a6f8-c25817b3a653",
+      "name": "Note Checklist",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "content": "## PDFShift (opcional)\n\nUsado para gerar o contrato de honorários em PDF. Free tier: 50 PDFs/mês.\n\n1. Cria conta em pdfshift.io/register\n2. Copia a API key em app.pdfshift.io/env/apikeys\n3. Cria credencial Header Auth chamada PDFShift:\n   - Name: X-API-Key\n   - Value: a API key copiada acima",
+        "height": 528,
+        "width": 608,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        912,
+        3056
+      ],
+      "id": "f7a1b2c3-d4e5-6789-abcd-ef0123456789",
+      "name": "Note PDFShift",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "url": "https://api.pdfshift.io/v3/account",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1152,
+        3440
+      ],
+      "id": "e1d2c3b4-a596-4877-8123-0987654321ab",
+      "name": "Validar PDFShift",
+      "credentials": {},
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "kanbanBoard",
+        "accountId": {
+          "__rl": true,
+          "value": "={{ $('Selecionar conta').item.json.id }}",
+          "mode": "id"
+        },
+        "name": "Urgências Jurídicas",
+        "currency": "BRL",
+        "automations": {
+          "settings": {
+            "auto_assign_task_to_agent": false,
+            "auto_complete_task_on_conversation_resolve": false,
+            "auto_create_task_for_conversation": false,
+            "auto_resolve_conversation_on_task_end": false,
+            "sync_task_and_conversation_agents": false,
+            "sync_task_and_conversation_labels_priority": false
+          }
+        }
+      },
+      "type": "@fazer-ai/n8n-nodes-chatwoot.chatwoot",
+      "typeVersion": 1,
+      "position": [
+        976,
+        2704
+      ],
+      "id": "ef134723-1bfb-4fb2-889b-0b71c21b9782",
+      "name": "Criar funil Sinistros",
+      "credentials": {},
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        2896
+      ],
+      "id": "43a3917d-96cf-49e8-8324-942d36c387e8",
+      "name": "Funil Sinistros já criado",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9f6c2546-8670-4fa7-98d6-998b2f3f4698",
+              "name": "id_funil",
+              "value": "={{ $('Criar funil Sinistros').item.json.id }}",
+              "type": "number"
+            },
+            {
+              "id": "c366d9fa-7b51-40f5-833e-5d58d1384e1b",
+              "name": "etapas",
+              "value": "=[\n  { \"etapa\": \"Registrada\", \"cor\": \"#E8735A\", \"descricao\": \"Urgência registrada, coletando informações iniciais\" },\n  { \"etapa\": \"Documentação\", \"cor\": \"#F39C12\", \"descricao\": \"Aguardando documentos do cliente\" },\n  { \"etapa\": \"Em Análise\", \"cor\": \"#9B7ED8\", \"descricao\": \"Advogado analisando o caso\" },\n  { \"etapa\": \"Medida Tomada\", \"cor\": \"#3A8F5C\", \"descricao\": \"Medida jurídica adotada (tutela, liminar etc.)\" },\n  { \"etapa\": \"Resolvida\", \"cor\": \"#2E7D32\", \"descricao\": \"Urgência resolvida\" },\n  { \"etapa\": \"Encerrada\", \"cor\": \"#607D8B\", \"descricao\": \"Urgência encerrada\" }\n]",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1184,
+        2704
+      ],
+      "id": "d566011b-35ee-4ac5-aa19-d504a503b708",
+      "name": "Etapas Sinistros",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "etapas",
+        "options": {
+          "destinationFieldName": "etapa"
+        }
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1376,
+        2704
+      ],
+      "id": "b90e65ca-4d38-498e-bc7a-a5177338a90a",
+      "name": "Split etapas Sinistros",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "resource": "kanbanStep",
+        "accountId": {
+          "__rl": true,
+          "value": "={{ $('Selecionar conta').item.json.id }}",
+          "mode": "id"
+        },
+        "kanbanBoardId": {
+          "__rl": true,
+          "value": "={{ $('Etapas Sinistros').item.json.id_funil }}",
+          "mode": "id"
+        },
+        "name": "Urgências Jurídicas",
+        "additionalFields": {
+          "color": "={{ $json.etapa.cor }}",
+          "description": "={{ $json.etapa.descricao }}"
+        }
+      },
+      "type": "@fazer-ai/n8n-nodes-chatwoot.chatwoot",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        2704
+      ],
+      "id": "aef243fd-82a6-4f5c-a938-8460c43152db",
+      "name": "Criar etapa Sinistros",
+      "credentials": {},
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c8db12cf-118c-46e0-aaea-5657894eec37",
+              "leftValue": "={{ $('Split etapas Sinistros').item.json.etapa.perdida }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1776,
+        2704
+      ],
+      "id": "182910e7-5a30-4506-a4f9-37fd98158f65",
+      "name": "Perdida Sinistros?",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "resource": "kanbanStep",
+        "operation": "update",
+        "accountId": {
+          "__rl": true,
+          "value": "={{ $('Selecionar conta').item.json.id }}",
+          "mode": "id"
+        },
+        "kanbanBoardId": {
+          "__rl": true,
+          "value": "={{ $('Criar funil Sinistros').item.json.id }}",
+          "mode": "id"
+        },
+        "kanbanStepId": {
+          "__rl": true,
+          "value": "={{ $('Criar etapa Sinistros').item.json.id }}",
+          "mode": "id"
+        },
+        "updateStepFields": {
+          "cancelled": true
+        }
+      },
+      "type": "@fazer-ai/n8n-nodes-chatwoot.chatwoot",
+      "typeVersion": 1,
+      "position": [
+        2000,
+        2704
+      ],
+      "id": "fa30ce3e-dd84-41a7-9e99-196721e450ca",
+      "name": "Atualizar etapa perdida Sinistros",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "content": "## Funil paralelo: Urgências Jurídicas\n\nUrgências (tutelas, liminares, prazos prescricionais) rodam em funil separado. Etapas: Registrada → Documentação → Em Análise → Medida Tomada → Resolvida/Encerrada.",
+        "height": 440,
+        "width": 1312,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        912,
+        2608
+      ],
+      "id": "3ed8d896-fcf6-4b09-97f3-26f48aebfb49",
+      "name": "Note funil sinistros",
+      "credentials": {}
+    }
+  ],
+  "connections": {
+    "Gatilho": {
+      "main": [
+        [
+          {
+            "node": "Configurar tabelas",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Selecionar conta",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Validar PDFShift",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Selecionar conta": {
+      "main": [
+        [
+          {
+            "node": "Etiquetas",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Atributos customizados",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Criar funil",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Criar funil Sinistros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Etiquetas": {
+      "main": [
+        [
+          {
+            "node": "Split etiquetas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split etiquetas": {
+      "main": [
+        [
+          {
+            "node": "Criar etiqueta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atributos customizados": {
+      "main": [
+        [
+          {
+            "node": "Split atributos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split atributos": {
+      "main": [
+        [
+          {
+            "node": "Criar atributo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar funil": {
+      "main": [
+        [
+          {
+            "node": "Etapas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Funil já criado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Etapas": {
+      "main": [
+        [
+          {
+            "node": "Split etapas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split etapas": {
+      "main": [
+        [
+          {
+            "node": "Criar etapa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar etapa": {
+      "main": [
+        [
+          {
+            "node": "Perdida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Perdida?": {
+      "main": [
+        [
+          {
+            "node": "Atualizar etapa perdida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar funil Sinistros": {
+      "main": [
+        [
+          {
+            "node": "Etapas Sinistros",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Funil Sinistros já criado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Etapas Sinistros": {
+      "main": [
+        [
+          {
+            "node": "Split etapas Sinistros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split etapas Sinistros": {
+      "main": [
+        [
+          {
+            "node": "Criar etapa Sinistros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar etapa Sinistros": {
+      "main": [
+        [
+          {
+            "node": "Perdida Sinistros?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Perdida Sinistros?": {
+      "main": [
+        [
+          {
+            "node": "Atualizar etapa perdida Sinistros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "pinData": {},
+  "activeVersionId": null,
+  "versionCounter": 6,
+  "triggerCount": 0,
+  "shared": [
+    {
+      "updatedAt": "2026-05-21T22:19:54.184Z",
+      "createdAt": "2026-05-21T22:19:54.184Z",
+      "role": "workflow:owner",
+      "workflowId": "lIfovThskAfeh2F7",
+      "projectId": "EXZkmU6lbSDQ8bsY",
+      "project": {
+        "updatedAt": "2026-01-03T16:16:02.267Z",
+        "createdAt": "2026-01-03T15:57:05.115Z",
+        "id": "EXZkmU6lbSDQ8bsY",
+        "name": "Alessandro Lima <admalessandrolima@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "cee7fe92-fc98-434b-8832-f8113371375e"
+      }
+    }
+  ],
+  "activeVersion": null
+}
