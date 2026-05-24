@@ -1,0 +1,15 @@
+{
+  "schema_version": "1",
+  "packs": [
+    {
+      "slug": "corretora-seguros",
+      "name": "Corretora de Seguros",
+      "description": "Atendente de corretora no WhatsApp: tira dúvidas de seguros de vida e auto, faz cotação, envia proposta, acompanha apólices e abre sinistros. Cuida do follow-up sozinho e passa os leads quentes para o corretor humano.",
+      "latest_version": "1.0.1",
+      "language": "pt-BR",
+      "tags": ["seguros", "vendas", "atendimento", "voz"],
+      "min_plugin_version": "1.0.0",
+      "tarball_url_template": "https://github.com/eusoualessandrolima/n8n-packs/releases/download/corretora-seguros-v{version}/corretora-seguros-{version}.tar.gz"
+    }
+  ]
+}
